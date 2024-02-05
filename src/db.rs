@@ -8,7 +8,7 @@ use bytes::Bytes;
 use tokio::sync::{broadcast, Notify};
 use tokio::time::{sleep_until, Instant};
 
-struct DbDropGuard {
+pub struct DbDropGuard {
     db: Db,
 }
 
@@ -16,7 +16,7 @@ struct DbDropGuard {
 // 当db被new创建时，会通过tokio的spawn开启一个线程：backgro_task,这个线程是用来
 // 将用户设置了过期时间的key-value清楚的，这个线程会持续运行到Db被drop之前
 #[derive(Debug, Clone)]
-struct Db {
+pub struct Db {
     shared: Arc<Shared>,
 }
 
@@ -54,7 +54,7 @@ struct Entry {
 }
 
 impl DbDropGuard {
-    fn new() -> Self {
+    pub fn new() -> Self {
         DbDropGuard { db: Db::new() }
     }
 

@@ -2,7 +2,9 @@
 // * ‘client’ 向server发起请求，set，get等命令，可以拿到结果
 // * 'command' 抽象出redis操作的各种命令
 // * 'frame' 一个完整的redis请求抽象出来的结构体，类似于http中的header，body等
+pub mod connection;
 pub mod db;
+pub mod frame;
 pub mod server;
 
 /// 默认端口

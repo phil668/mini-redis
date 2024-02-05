@@ -22,7 +22,7 @@ async fn main() -> mini_redis::Result<()> {
     // 监听listen_url
     let listner = TcpListener::bind(listen_url).await?;
 
-    server::run(listner);
+    server::run(listner, async {});
 
     Ok(())
 }
