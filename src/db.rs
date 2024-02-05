@@ -1,11 +1,12 @@
 use std::{
     collections::{BTreeSet, HashMap},
     sync::{Arc, Mutex},
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use bytes::Bytes;
 use tokio::sync::{broadcast, Notify};
+use tokio::time::{sleep_until, Instant};
 
 struct DbDropGuard {
     db: Db,
@@ -62,6 +63,12 @@ impl DbDropGuard {
     }
 }
 
+impl Drop for DbDropGuard {
+    fn drop(&mut self) {
+        self.db.shut_down_purge()
+    }
+}
+
 impl Db {
     fn new() -> Db {
         let shared: Arc<Shared> = Arc::new(Shared {
@@ -114,10 +121,69 @@ impl Db {
                 expires_at,
             },
         );
+
+        if let Some(prev) = prev {
+            // 如果之前hashMap存储的值有expirea_at的话，需要将expirations内对应的值也清除掉
+            if let Some(when) = prev.expires_at {
+                state.expirations.remove(&(when, key.clone()));
+            }
+        }
+
+        // 如果set的时候传递了过期时间的话，需要在expireation的BTreeSet中设置相应的key和过期时间
+        if let Some(when) = expires_at {
+            state.expirations.insert((when, key.clone()));
+        }
+
+        // 在设置完haspMap以及Btreeset之后将互斥锁释放掉
+        drop(state);
+
+        if notify {
+            // 如果需要notify，即过期时间已经大于现在的时间，就通知后台线程去清理过期的key
+            self.shared.bacground_task.notify_one()
+        }
+    }
+
+    // 订阅一个值，返回一个boardcast的receiver，通过这个recivier可以获取到这个值变化
+    fn subscribe(&self, key: String) -> broadcast::Receiver<Bytes> {
+        use std::collections::hash_map::Entry;
+        // todo
+        let mut state = self.shared.state.lock().unwrap();
+        match state.pub_sub.entry(key) {
+            Entry::Occupied(v) => v.get().subscribe(),
+            Entry::Vacant(v) => {
+                // 如果没有需要新建一个boardcast
+                let (tx, rx) = broadcast::channel(1024);
+                v.insert(tx);
+                rx
+            }
+        }
+    }
+
+    // 发布消息 ，让所有订阅者进行接收，哪些值改动了
+    // 返回订阅者的数量
+    fn publish(&self, key: &str, value: Bytes) -> usize {
+        let state = self.shared.state.lock().unwrap();
+        state
+            .pub_sub
+            .get(key)
+            .map(|tx| tx.send(value).unwrap_or(0))
+            .unwrap_or(0)
+    }
+
+    // 当db被drop时，需要通知后台清除所有的key
+    fn shut_down_purge(&self) {
+        let mut state = self.shared.state.lock().unwrap();
+
+        state.shutdowm = true;
+
+        drop(state);
+
+        self.shared.bacground_task.notify_one();
     }
 }
 
 impl Shared {
+    // 清除所有过期的key
     fn purge_expired_keys(&self) -> Option<Instant> {
         let mut state = self.state.lock().unwrap();
 
@@ -132,13 +198,14 @@ impl Shared {
         // 使用*操作符，解引用出互斥锁内的数据，然后通过&mut创建其内部数据的可变引用
         let state = &mut *state;
 
+        // 迭代循环expireations，将所有过期的key全部清除掉
         while let Some(&(when, ref key)) = state.expirations.iter().next() {
             // 比较b tree树中的时间和当前时间
             if when > now {
                 return Some(when);
             }
 
-            // key过期，remove1
+            // key过期，remove
             state.entries.remove(key);
             state.expirations.remove(&(when, key.clone()));
         }
@@ -160,7 +227,21 @@ impl State {
     }
 }
 
-// 清除过期的任务
+// 后台持续运行的任务，用于清除过期的key
 async fn purge_expired_tasks(shared: Arc<Shared>) {
-    while !shared.is_shutdown() {}
+    while !shared.is_shutdown() {
+        // 如果purge_expired_keys返回了时间，说明暂时还没有过期的值
+        if let Some(when) = shared.purge_expired_keys() {
+            tokio::select! {
+                _ = sleep_until(when) => {}
+                _ = shared.bacground_task.notified() => {}
+            }
+            // 如果没有返回时间，说明没有即将过期的key了
+        } else {
+            // 等待其他线程的通知
+            shared.bacground_task.notified().await;
+        }
+    }
+
+    dbg!("Purege background task shut down");
 }
