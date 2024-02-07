@@ -9,7 +9,7 @@ use tokio::sync::{broadcast, Notify};
 use tokio::time::{sleep_until, Instant};
 
 pub struct DbDropGuard {
-    db: Db,
+    pub db: Db,
 }
 
 // db包含一个 hashmap，存储key-value数据
@@ -58,7 +58,7 @@ impl DbDropGuard {
         DbDropGuard { db: Db::new() }
     }
 
-    fn db(&self) -> Db {
+    pub fn db(&self) -> Db {
         self.db.clone()
     }
 }

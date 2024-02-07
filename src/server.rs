@@ -63,9 +63,20 @@ impl Listener {
                 .await
                 .unwrap();
             let socket = self.accept().await?;
-        }
 
-        Ok(())
+            let handler = Handler {
+                db: self.db_holder.db(),
+                connection: Connection::new(socket),
+            };
+
+            // 开启一个新的线程来处理
+            tokio::spawn(async move {
+                // TODO 处理失败的情况
+                handler.run().await;
+                // 处理完请求后 将许可证释放掉 给其他线程使用
+                drop(permit)
+            });
+        }
     }
     // 开始接受tcpStream
     async fn accept(&self) -> crate::Result<TcpStream> {
@@ -86,4 +97,17 @@ impl Listener {
             backoff *= 2;
         }
     }
+}
+
+impl Handler {
+    // 处理请求
+    // 从TcpStream中读取出frame，并将响应信息写入TcpStream中
+    async fn run(&self) -> crate::Result<()> {
+        while true {
+            
+        }
+        Ok(())
+    }
+
+    
 }

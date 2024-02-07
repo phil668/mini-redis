@@ -34,14 +34,14 @@ pub enum Frame {
 }
 
 #[derive(Debug)]
-enum Error {
+pub enum Error {
     Incomplete,
     Other(crate::Error),
 }
 
 impl Frame {
     // 检查src能否被完整的解码
-    fn check(src: &mut Cursor<&[u8]>) -> Result<(), Error> {
+    pub fn check(src: &mut Cursor<&[u8]>) -> Result<(), Error> {
         match get_u8(src)? {
             b'+' => {
                 get_line(src)?;
@@ -82,7 +82,7 @@ impl Frame {
         }
     }
 
-    fn parse(src: &mut Cursor<&[u8]>) -> Result<Frame, Error> {
+    pub fn parse(src: &mut Cursor<&[u8]>) -> Result<Frame, Error> {
         match get_u8(src)? {
             // 简单字符串 直接读取字符串内容并返回
             b'+' => {
@@ -203,5 +203,16 @@ impl From<&str> for Error {
 impl From<FromUtf8Error> for Error {
     fn from(_src: FromUtf8Error) -> Error {
         "protocol error; invalid frame format".into()
+    }
+}
+
+impl std::error::Error for Error {}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::Incomplete => "stream ended early".fmt(f),
+            Error::Other(err) => err.fmt(f),
+        }
     }
 }
