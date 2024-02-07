@@ -1,8 +1,8 @@
-use std::io::Cursor;
+use std::io::{self, Cursor, Write};
 
 use bytes::{Buf, BytesMut};
 use tokio::{
-    io::{AsyncReadExt, BufWriter},
+    io::{AsyncReadExt, AsyncWriteExt, BufWriter},
     net::TcpStream,
 };
 
@@ -64,5 +64,67 @@ impl Connection {
                 return Err(e.into());
             }
         }
+    }
+
+    async fn write_frame(&mut self, frame: &Frame) -> io::Result<()> {
+        match frame {
+            Frame::Array(v) => {
+                let len = v.len();
+
+                self.stream.write_u8(b'*').await?;
+                self.write_decimal(len as u64).await?;
+
+                for item in v {
+                    self.write_value(item).await?;
+                }
+            }
+            _ => {
+                self.write_value(frame).await?;
+            }
+        }
+
+        self.stream.flush().await
+    }
+
+    async fn write_value(&mut self, frame: &Frame) -> io::Result<()> {
+        match frame {
+            Frame::Simple(v) => {
+                self.stream.write_u8(b'+').await?;
+                self.stream.write_all(v.as_bytes()).await?;
+                self.stream.write_all(b"\r\n").await?;
+            }
+            Frame::Error(v) => {
+                self.stream.write_u8(b'-').await?;
+                self.stream.write_all(v.as_bytes()).await?;
+                self.stream.write_all(b"\r\n").await?;
+            }
+            Frame::Integer(v) => {
+                self.stream.write_u8(b':').await?;
+                self.write_decimal(*v).await?;
+            }
+            Frame::Bulk(v) => {
+                self.stream.write_u8(b'$').await?;
+                self.write_decimal(v.len() as u64).await?;
+                self.stream.write_all(v).await?;
+                self.stream.write_all(b"\r\n").await?;
+            }
+            Frame::Array(_) => unreachable!(),
+            _ => {
+                unimplemented!()
+            }
+        }
+        Ok(())
+    }
+
+    async fn write_decimal(&mut self, v: u64) -> io::Result<()> {
+        // 写入一个数字到stream中
+        let mut buf = [0u8; 20];
+        let mut buf = Cursor::new(&mut buf[..]);
+
+        write!(&mut buf, "{}", v)?;
+
+        self.stream.write_all(&buf.get_ref()[..]).await?;
+        self.stream.write_all(b"\r\n").await?;
+        Ok(())
     }
 }
