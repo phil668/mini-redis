@@ -6,6 +6,7 @@ pub mod connection;
 pub mod db;
 pub mod frame;
 pub mod server;
+pub mod shutdown;
 
 /// 默认端口
 pub const DEFAULT_PORT: u16 = 6379;
