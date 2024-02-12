@@ -5,12 +5,15 @@ use tokio::{
     sync::{broadcast, mpsc, Semaphore},
     time::{self, Duration},
 };
-use tracing::info;
+use tracing::{error, info};
 
 use crate::{
     connection::Connection,
     db::{Db, DbDropGuard},
+    shutdown,
 };
+
+use crate::shutdown::Shutdown;
 // 实现一个server.run方法，可以传入一个TcpListener，能够获取到请求，对请求进行处理
 
 struct Listener {
@@ -24,6 +27,7 @@ struct Listener {
 struct Handler {
     db: Db,
     connection: Connection,
+    shutdown: Shutdown,
 }
 
 // 最大连接数
@@ -43,12 +47,17 @@ pub async fn run(listener: TcpListener, shutdown: impl Future) {
 
     tokio::select! {
         res = server.run() => {
-            todo!()
+            if let Err(err) = res {
+                error!(cause = %err, "failed to accept")
+            };
         }
         _ = shutdown => {
             info!("shuting down")
         }
     }
+
+    // drop掉notify_shutdown
+    // TODO
 }
 
 impl Listener {
@@ -67,12 +76,14 @@ impl Listener {
             let handler = Handler {
                 db: self.db_holder.db(),
                 connection: Connection::new(socket),
+                shutdown: Shutdown::new(self.notify_shutdown.subscribe()),
             };
 
             // 开启一个新的线程来处理
             tokio::spawn(async move {
-                // TODO 处理失败的情况
-                handler.run().await;
+                if let Err(err) = handler.run().await {
+                    error!(cause = ?err,"connection error")
+                }
                 // 处理完请求后 将许可证释放掉 给其他线程使用
                 drop(permit)
             });
@@ -102,12 +113,24 @@ impl Listener {
 impl Handler {
     // 处理请求
     // 从TcpStream中读取出frame，并将响应信息写入TcpStream中
-    async fn run(&self) -> crate::Result<()> {
-        while true {
-            
+    async fn run(&mut self) -> crate::Result<()> {
+        while !self.shutdown.is_shutdown() {
+            let maybe_frame = tokio::select! {
+                res = self.connection.read_frame() => {
+                    res?
+                }
+                _ = self.shutdown.recv() => {
+                    return Ok(())
+                }
+            };
+
+            let frame = match maybe_frame {
+                Some(frame) => frame,
+                None => {
+                    return Ok(());
+                }
+            };
         }
         Ok(())
     }
-
-    
 }

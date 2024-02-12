@@ -22,7 +22,7 @@ impl Connection {
         }
     }
 
-    async fn read_frame(&mut self) -> crate::Result<Option<Frame>> {
+    pub async fn read_frame(&mut self) -> crate::Result<Option<Frame>> {
         //
         loop {
             if let Some(frame) = self.parse_frame()? {
