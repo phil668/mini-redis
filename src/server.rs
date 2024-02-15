@@ -73,7 +73,7 @@ impl Listener {
                 .unwrap();
             let socket = self.accept().await?;
 
-            let handler = Handler {
+            let mut handler = Handler {
                 db: self.db_holder.db(),
                 connection: Connection::new(socket),
                 shutdown: Shutdown::new(self.notify_shutdown.subscribe()),
