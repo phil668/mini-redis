@@ -1,4 +1,4 @@
-use std::vec;
+use std::{fmt, vec};
 
 use bytes::Bytes;
 
@@ -6,17 +6,18 @@ use crate::frame::Frame;
 
 use std::str;
 
-struct Parse {
+pub struct Parse {
     parts: vec::IntoIter<Frame>,
 }
 
-enum ParseError {
+#[derive(Debug)]
+pub enum ParseError {
     EndOfStream,
     Other(crate::Error),
 }
 
 impl Parse {
-    fn new(frame: Frame) -> Result<Parse, ParseError> {
+    pub fn new(frame: Frame) -> Result<Parse, ParseError> {
         let array = match frame {
             Frame::Array(v) => v,
             _ => {
@@ -33,7 +34,7 @@ impl Parse {
         self.parts.next().ok_or(ParseError::EndOfStream)
     }
 
-    fn next_string(&mut self) -> Result<String, ParseError> {
+    pub fn next_string(&mut self) -> Result<String, ParseError> {
         match self.next()? {
             Frame::Simple(s) => Ok(s),
             Frame::Bulk(data) => str::from_utf8(&data[..])
@@ -70,11 +71,11 @@ impl Parse {
         }
     }
 
-    fn finish(&mut self) -> Result<(), ParseError> {
+    pub fn finish(&mut self) -> Result<(), ParseError> {
         if self.parts.next().is_none() {
-            Ok(())
+            Result::Ok(())
         } else {
-            Err("protocol error; expected end of frame, but there was more".into())
+            Result::Err("protocol error; expected end of frame, but there was more".into())
         }
     }
 }
@@ -91,3 +92,14 @@ impl From<&str> for ParseError {
         ParseError::Other(value.into())
     }
 }
+
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ParseError::EndOfStream => "protocol error;unexpected of end of stream".fmt(f),
+            ParseError::Other(err) => err.fmt(f),
+        }
+    }
+}
+
+impl std::error::Error for ParseError {}
