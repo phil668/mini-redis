@@ -46,7 +46,7 @@ impl Parse {
         }
     }
 
-    fn next_bytes(&mut self) -> Result<Bytes, ParseError> {
+    pub fn next_bytes(&mut self) -> Result<Bytes, ParseError> {
         match self.next()? {
             Frame::Simple(s) => Ok(Bytes::from(s.into_bytes())),
             Frame::Bulk(data) => Ok(data),
@@ -56,7 +56,7 @@ impl Parse {
         }
     }
 
-    fn next_int(&mut self) -> Result<u64, ParseError> {
+    pub fn next_int(&mut self) -> Result<u64, ParseError> {
         use atoi::atoi;
 
         const MSG: &str = "protocol error;invalid number";

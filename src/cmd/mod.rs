@@ -3,6 +3,7 @@ use crate::{frame::Frame, parse::Parse};
 use get::Get;
 
 mod get;
+mod set;
 
 #[derive(Debug)]
 pub enum Command {
