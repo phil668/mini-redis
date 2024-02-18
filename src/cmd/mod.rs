@@ -1,6 +1,7 @@
 use crate::{frame::Frame, parse::Parse};
 
 use get::Get;
+use set::Set;
 
 mod get;
 mod set;
@@ -9,7 +10,7 @@ mod set;
 pub enum Command {
     Get(Get),
     Publish,
-    Set,
+    Set(Set),
     Subscribe,
     Unsubscribe,
     Ping,
@@ -25,7 +26,7 @@ impl Command {
         let command = match &command_name[..] {
             "get" => Command::Get(Get::parse_frame(&mut parse)?),
             "publish" => Command::Publish,
-            "set" => Command::Set,
+            "set" => Command::Set(Set::parse_frame(&mut parse)?),
             "subscribe" => Command::Subscribe,
             "unsubscribe" => Command::Unsubscribe,
             "ping" => Command::Ping,

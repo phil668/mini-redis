@@ -3,7 +3,8 @@ use std::time::Duration;
 
 use crate::parse::{Parse, ParseError};
 
-struct Set {
+#[derive(Debug)]
+pub struct Set {
     key: String,
     value: Bytes,
     expire: Option<Duration>,
@@ -31,7 +32,7 @@ impl Set {
     }
 
     // SET key value [EX seconds|PX milliseconds]
-    fn parse_frame(parse: &mut Parse) -> crate::Result<Set> {
+    pub fn parse_frame(parse: &mut Parse) -> crate::Result<Set> {
         let key = parse.next_string()?;
         let value = parse.next_bytes()?;
         let mut expire: Option<Duration> = None;
